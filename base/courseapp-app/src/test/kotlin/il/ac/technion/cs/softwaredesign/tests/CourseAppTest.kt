@@ -617,6 +617,22 @@ class CourseAppTest{
     }
 
     @Test
+    fun `numberOfTotalUsersInChannel get updated after join and part`(){
+
+        val admin= courseApp.login("admin","admin")
+
+        courseApp.channelJoin(admin,"#1")
+        assertThat(courseApp.numberOfTotalUsersInChannel(admin,"#1"), equalTo(1L))
+        (1..511).forEach{
+            val token=courseApp.login("$it","password")
+            courseApp.channelJoin(token,"#1")
+        }
+        assertThat(courseApp.numberOfTotalUsersInChannel(admin,"#1"), equalTo(512L))
+        courseApp.channelPart(admin,"#1")
+        assertThat(courseApp.numberOfTotalUsersInChannel(admin,"#1"), equalTo(511L))
+    }
+
+    @Test
     fun `get10TopUsersTest primary order only`() {
         val tokens = (0..50).map {Pair(courseApp.login(it.toString(), it.toString()), it.toString())}
         (0..50).forEach {courseApp.makeAdministrator(tokens[0].first, it.toString())}
