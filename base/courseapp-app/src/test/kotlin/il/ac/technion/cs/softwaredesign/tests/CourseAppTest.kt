@@ -6,10 +6,7 @@ import com.natpryce.hamkrest.assertion.assertThat
 import com.natpryce.hamkrest.equalTo
 import com.natpryce.hamkrest.present
 import il.ac.technion.cs.softwaredesign.*
-import il.ac.technion.cs.softwaredesign.exceptions.InvalidTokenException
-import il.ac.technion.cs.softwaredesign.exceptions.NoSuchEntityException
-import il.ac.technion.cs.softwaredesign.exceptions.UserAlreadyLoggedInException
-import il.ac.technion.cs.softwaredesign.exceptions.UserNotAuthorizedException
+import il.ac.technion.cs.softwaredesign.exceptions.*
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
@@ -21,9 +18,6 @@ class CourseAppTest{
     private val injector = Guice.createInjector(CourseAppTestModule())
     private val courseApp = injector.getInstance<CourseApp>()
     private val courseAppStatistics = injector.getInstance<CourseAppStatistics>()
-
-   // private val courseAppStatistics = injector.getInstance<CourseAppStatistics>()
-
     private val courseAppInitializer = injector.getInstance<CourseAppInitializer>()
 
     init {
@@ -515,18 +509,111 @@ class CourseAppTest{
     }
 
     @Test
-    fun channelPartTest() {
-        // TODO: implement
+    fun `user can join a channel and then leave`() {
+        val adminToken=courseApp.login("admin","password")
+        val aviadToken=courseApp.login("aviad","aviad123")
+        val ronToken=courseApp.login("ron","r4123")
+        courseApp.channelJoin(adminToken,"#1")
+        courseApp.channelJoin(adminToken,"#2")
+        courseApp.channelJoin(aviadToken,"#1")
+        courseApp.channelJoin(ronToken,"#2")
+        courseApp.logout(ronToken)
+        //verify that the users joined
+        assertThat(courseApp.isUserInChannel(aviadToken,"#1","aviad"), isTrue)
+        assertThat(courseApp.isUserInChannel(adminToken,"#2","ron"), isTrue)
+        courseApp.channelPart(aviadToken,"#1")
+        assertThat(courseApp.isUserInChannel(adminToken,"#1","aviad"), isFalse)
+    }
+
+    @Test
+    fun `users join a channel, and the channel is destroyed when empty`() {
+        val adminToken=courseApp.login("admin","password")
+        val aviadToken=courseApp.login("aviad","aviad123")
+        val ronToken=courseApp.login("ron","r4123")
+        courseApp.channelJoin(adminToken,"#1")
+        courseApp.channelJoin(adminToken,"#2")
+        courseApp.channelJoin(aviadToken,"#1")
+        courseApp.channelJoin(ronToken,"#2")
+        courseApp.logout(ronToken)
+        //verify that the users joined
+        assertThat(courseApp.isUserInChannel(aviadToken,"#1","aviad"), isTrue)
+        assertThat(courseApp.isUserInChannel(adminToken,"#2","ron"), isTrue)
+        courseApp.channelPart(aviadToken,"#1")
+        assertThat(courseApp.isUserInChannel(adminToken,"#1","aviad"), isFalse)
+        courseApp.channelPart(adminToken,"#1")
+        //channel should have destroyed by now, let's try to re-use his name without getting exception
+        courseApp.channelJoin(adminToken,"#1")
+
+    }
+
+    @Test
+    fun `channelPart throws InvalidTokenException If the auth token is invalid`() {
+        val adminToken=courseApp.login("admin","password")
+        val aviadToken=courseApp.login("aviad","aviad123")
+        val ronToken=courseApp.login("ron","r4123")
+        courseApp.channelJoin(adminToken,"#1")
+        courseApp.channelJoin(adminToken,"#2")
+        courseApp.channelJoin(aviadToken,"#1")
+        courseApp.channelJoin(ronToken,"#2")
+        courseApp.logout(ronToken)
+        //verify that the users joined
+        assertThat(courseApp.isUserInChannel(aviadToken,"#1","aviad"), isTrue)
+        assertThat(courseApp.isUserInChannel(adminToken,"#2","ron"), isTrue)
+        assertThrowsWithTimeout<Unit, InvalidTokenException>({ courseApp.channelPart("invalidToken","#1")})
+    }
+
+
+    @Test
+    fun `channelPart throws NoSuchEntityException If token identifies a user who is not a member of channel, or channel does exist`() {
+        val adminToken=courseApp.login("admin","password")
+        val aviadToken=courseApp.login("aviad","aviad123")
+        val ronToken=courseApp.login("ron","r4123")
+        courseApp.channelJoin(adminToken,"#1")
+        courseApp.channelJoin(adminToken,"#2")
+        courseApp.channelJoin(aviadToken,"#1")
+        courseApp.channelJoin(ronToken,"#2")
+        courseApp.logout(ronToken)
+        //verify that the users joined
+        assertThat(courseApp.isUserInChannel(aviadToken,"#1","aviad"), isTrue)
+        assertThat(courseApp.isUserInChannel(adminToken,"#2","ron"), isTrue)
+        courseApp.channelPart(aviadToken,"#1")
+        assertThat(courseApp.isUserInChannel(adminToken,"#1","aviad"), isFalse)
+        assertThrowsWithTimeout<Unit, NoSuchEntityException>({ courseApp.channelPart(aviadToken,"#1")})
+        assertThrowsWithTimeout<Unit, NoSuchEntityException>({ courseApp.channelPart(aviadToken,"#nonExistingChannel")})
+
     }
 
     @Test
     fun channelJoinTest() {
-        // TODO: implement
+        val adminToken=courseApp.login("admin","password")
+        val aviadToken=courseApp.login("aviad","aviad123")
+        val ronToken=courseApp.login("ron","r4123")
+        courseApp.channelJoin(adminToken,"#1")
+        courseApp.channelJoin(aviadToken,"#1")
+        courseApp.channelJoin(adminToken,"#2")
+        courseApp.channelJoin(ronToken,"#2")
+        courseApp.channelJoin(aviadToken,"#2")
+        courseApp.logout(ronToken)
+        assertThrowsWithTimeout<Unit, InvalidTokenException>({ courseApp.channelJoin(ronToken,"#nonExistingChannel")})
+        assertThrowsWithTimeout<Unit, NameFormatException>({ courseApp.channelJoin(adminToken,"123#nonExistingChannel")})
+        assertThrowsWithTimeout<Unit, NameFormatException>({ courseApp.channelJoin(adminToken,"badNaming")})
+        assertThrowsWithTimeout<Unit, UserNotAuthorizedException>({ courseApp.channelJoin(aviadToken,"#notExistingChannel")})
     }
 
     @Test
     fun makeAdminTest() {
-        // TODO: implement
+       val admin= courseApp.login("admin","admin")
+        val aviad=courseApp.login("aviad","aviad123")
+        val ron=courseApp.login("ron","ron123")
+        courseApp.makeAdministrator(admin,"aviad")
+        //only admin can create a channel so let's call channel Join with the new admin
+        courseApp.channelJoin(aviad,"#1")
+        assertThrowsWithTimeout<Unit, InvalidTokenException>({ courseApp.makeAdministrator("INVALIDToken","#1")})
+        assertThrowsWithTimeout<Unit, UserNotAuthorizedException>({ courseApp.makeAdministrator(ron,"ron")})
+        assertThrowsWithTimeout<Unit, NoSuchEntityException>({ courseApp.makeAdministrator(aviad,"NotExistingUser")})
+        //we can even make logout users admins
+        courseApp.logout(ron)
+        courseApp.makeAdministrator(admin,"ron")
     }
 
     @Test
