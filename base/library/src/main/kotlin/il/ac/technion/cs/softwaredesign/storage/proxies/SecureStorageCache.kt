@@ -9,10 +9,12 @@ class SecureStorageCache(private val secureStorage: SecureStorage) : SecureStora
 
     override fun read(key: ByteArray): ByteArray? {
         val keyWrapper = ByteArrayKey(key)
-        if (cache[keyWrapper] == null) {
-            cache[keyWrapper] = secureStorage.read(key)
+        var cacheValue=cache[keyWrapper]
+        if (cacheValue == null) {
+            cacheValue=secureStorage.read(key)
+            cache[keyWrapper] =  cacheValue
         }
-        return cache[keyWrapper]
+        return cacheValue
     }
 
     override fun write(key: ByteArray, value: ByteArray) {
