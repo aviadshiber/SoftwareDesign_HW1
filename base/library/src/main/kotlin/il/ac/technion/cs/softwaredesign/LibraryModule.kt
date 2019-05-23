@@ -1,7 +1,7 @@
 package il.ac.technion.cs.softwaredesign
 
 import com.authzee.kotlinguice4.KotlinModule
-import com.google.inject.Inject
+
 import com.google.inject.Provides
 import com.google.inject.Singleton
 import com.google.inject.matcher.Matcher
@@ -19,6 +19,7 @@ import il.ac.technion.cs.softwaredesign.storage.statistics.IStatisticsStorage
 import il.ac.technion.cs.softwaredesign.storage.statistics.SecureStatisticsStorage
 import il.ac.technion.cs.softwaredesign.storage.users.SecureUserStorage
 import il.ac.technion.cs.softwaredesign.storage.utils.DB_NAMES
+import javax.inject.Inject
 
 
 class LibraryModule : KotlinModule() {
