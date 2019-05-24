@@ -52,13 +52,21 @@ import java.util.*
  * Initializes an empty symbol table.
  */
 class SecureAVLTree<Key : ISecureStorageKey<Key>>
-constructor(private val secureStorage: SecureStorage, private val keyDefault: () -> Key) {
+constructor(private val secureStorage: SecureStorage, private val idInByteArray: ByteArray, private val keyDefault: () -> Key) {
     /**
      * The root node.
      */
+
+    private val rootKey = idInByteArray + ROOT_KEY.toByteArray()
+    init {
+        if (secureStorage.read(rootKey) == null) {
+            secureStorage.write(rootKey, ROOT_INIT_INDEX.longToByteArray())
+        }
+    }
+
     private var root: Node? = null
         get() {
-            val rootIndexByteArray = secureStorage.read(ROOT_KEY.toByteArray())
+            val rootIndexByteArray = secureStorage.read(rootKey)
                     ?: throw NullPointerException("root Index should not be null after loading from storage")
             val rootIndex = rootIndexByteArray.bytesToLong()
 
@@ -70,7 +78,7 @@ constructor(private val secureStorage: SecureStorage, private val keyDefault: ()
 
         }
         set(value) {
-            val rootKeyByteArray = ROOT_KEY.toByteArray()
+            val rootKeyByteArray = rootKey
             if (value == null) {
                 secureStorage.write(rootKeyByteArray,ROOT_INIT_INDEX.longToByteArray())
                 field = null
@@ -663,7 +671,7 @@ constructor(private val secureStorage: SecureStorage, private val keyDefault: ()
      * This class represents an inner node of the AVL tree.
      */
     private inner class Node : IStorageConvertable<Node> {
-        val addressGenerator: ISequenceGenerator = SecureSequenceGenerator(secureStorage)
+        val addressGenerator: ISequenceGenerator = SecureSequenceGenerator(secureStorage, idInByteArray)
 
         var pointer: IPointer
 
@@ -791,8 +799,6 @@ constructor(private val secureStorage: SecureStorage, private val keyDefault: ()
                     rightPointerByteArray+nodeKey.toByteArray()
 
         }
-
-
 
         override fun fromByteArray(value: ByteArray) {
 

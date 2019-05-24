@@ -6,7 +6,9 @@ import il.ac.technion.cs.softwaredesign.storage.api.IChannelManager
 import il.ac.technion.cs.softwaredesign.storage.channels.IChannelStorage
 import il.ac.technion.cs.softwaredesign.storage.api.IStatisticsManager
 import il.ac.technion.cs.softwaredesign.storage.datastructures.CountIdKey
+import il.ac.technion.cs.softwaredesign.storage.datastructures.IdOperatorKey
 import il.ac.technion.cs.softwaredesign.storage.datastructures.SecureAVLTree
+import il.ac.technion.cs.softwaredesign.storage.utils.ConversionUtils
 import il.ac.technion.cs.softwaredesign.storage.utils.DB_NAMES.TREE_CHANNELS_BY_ACTIVE_USERS_COUNT
 import il.ac.technion.cs.softwaredesign.storage.utils.DB_NAMES.TREE_CHANNELS_BY_USERS_COUNT
 import il.ac.technion.cs.softwaredesign.storage.utils.MANAGERS_CONSTS
@@ -21,13 +23,17 @@ class ChannelManager
 @Inject constructor(private val channelStorage: IChannelStorage,
                     private val statisticsManager: IStatisticsManager,
                     @ChannelIdSeqGenerator private val channelIdGenerator: ISequenceGenerator,
+                    @ChannelTreesStorage private val channelTreesStorage: SecureStorage,
                     @ChannelByUserCountStorage private val channelsByUsersCountStorage: SecureStorage,
                     @ChannelByActiveUserCountStorage private val channelsByActiveUsersCountStorage: SecureStorage
 ) : IChannelManager {
-    private val defaultKey: () -> CountIdKey = { CountIdKey() }
+    private val defaultIdOperatorKey: () -> IdOperatorKey = { IdOperatorKey() }
+    private val defaultCountIdKey: () -> CountIdKey = { CountIdKey() }
 
-    private val channelsByUsersCountTree = SecureAVLTree(channelsByUsersCountStorage, defaultKey)
-    private val channelsByActiveUsersCountTree = SecureAVLTree(channelsByActiveUsersCountStorage, defaultKey)
+    private val channelsByUsersCountTree =
+            SecureAVLTree(channelsByUsersCountStorage, TREE_CHANNELS_BY_USERS_COUNT.toByteArray(), defaultCountIdKey)
+    private val channelsByActiveUsersCountTree =
+            SecureAVLTree(channelsByActiveUsersCountStorage, TREE_CHANNELS_BY_ACTIVE_USERS_COUNT.toByteArray(), defaultCountIdKey)
 
     override fun addChannel(channelName: String): Long {
         if (channelName == CHANNEL_INVALID_NAME) throw IllegalArgumentException("channel name cannot be empty")
@@ -41,8 +47,8 @@ class ChannelManager
         channelStorage.setPropertyStringToChannelId(channelId, CHANNEL_NAME_PROPERTY, channelName)
         channelStorage.setPropertyLongToChannelId(channelId, MANAGERS_CONSTS.CHANNEL_NR_MEMBERS, 0L)
         channelStorage.setPropertyLongToChannelId(channelId, MANAGERS_CONSTS.CHANNEL_NR_ACTIVE_MEMBERS, 0L)
-        channelStorage.setPropertyListToChannelId(channelId, MANAGERS_CONSTS.CHANNEL_MEMBERS_LIST, emptyList())
-        channelStorage.setPropertyListToChannelId(channelId, MANAGERS_CONSTS.CHANNEL_OPERATORS_LIST, emptyList())
+//        channelStorage.setPropertyListToChannelId(channelId, MANAGERS_CONSTS.CHANNEL_MEMBERS_LIST, emptyList())
+//        channelStorage.setPropertyListToChannelId(channelId, MANAGERS_CONSTS.CHANNEL_OPERATORS_LIST, emptyList())
 
         // trees
         addNewChannelToChannelTrees(channelId = channelId, count = 0L)
@@ -108,58 +114,109 @@ class ChannelManager
                 ?: throw IllegalArgumentException("channel id is valid but returned null")
     }
 
-    override fun getChannelMembersList(channelId: Long): List<Long> {
-        if (!isChannelValid(channelId = channelId)) throw IllegalArgumentException("channel id is not valid")
-        return channelStorage.getPropertyListByChannelId(channelId, MANAGERS_CONSTS.CHANNEL_MEMBERS_LIST)
-                ?: throw IllegalArgumentException("channel id does not exist")
-    }
-
-    override fun addMemberToChannel(channelId: Long, memberId: Long) {
-        if (!isChannelValid(channelId = channelId)) throw IllegalArgumentException("channel id is not valid")
-        val currentList = ArrayList<Long>(getChannelMembersList(channelId))
-        if (currentList.contains(memberId)) throw IllegalAccessException("member id already exists in channel")
-        currentList.add(memberId)
-        channelStorage.setPropertyListToChannelId(channelId, MANAGERS_CONSTS.CHANNEL_MEMBERS_LIST, currentList)
-        channelStorage.setPropertyLongToChannelId(channelId, MANAGERS_CONSTS.CHANNEL_NR_MEMBERS, currentList.size.toLong())
-
-        val size = currentList.size.toLong()
-        updateKeyInTree(TREE_CHANNELS_BY_USERS_COUNT, channelId, size - 1L, size)
-    }
-
-    override fun removeMemberFromChannel(channelId: Long, memberId: Long) {
-        if (!isChannelValid(channelId = channelId)) throw IllegalArgumentException("channel id is not valid")
-        val currentList = ArrayList<Long>(getChannelMembersList(channelId))
-        if (!currentList.contains(memberId)) throw IllegalAccessException("member id does not exists in channel")
-        currentList.remove(memberId)
-        channelStorage.setPropertyListToChannelId(channelId, MANAGERS_CONSTS.CHANNEL_MEMBERS_LIST, currentList)
-        channelStorage.setPropertyLongToChannelId(channelId, MANAGERS_CONSTS.CHANNEL_NR_MEMBERS, currentList.size.toLong())
-
-        val size = currentList.size.toLong()
-        updateKeyInTree(TREE_CHANNELS_BY_USERS_COUNT, channelId, size + 1L, size)
-    }
+//    override fun getChannelMembersList(channelId: Long): List<Long> {
+//        if (!isChannelValid(channelId = channelId)) throw IllegalArgumentException("channel id is not valid")
+//        return channelStorage.getPropertyListByChannelId(channelId, MANAGERS_CONSTS.CHANNEL_MEMBERS_LIST)
+//                ?: throw IllegalArgumentException("channel id does not exist")
+//    }
+//
+//    override fun addMemberToChannel(channelId: Long, memberId: Long) {
+//        if (!isChannelValid(channelId = channelId)) throw IllegalArgumentException("channel id is not valid")
+//        val currentList = ArrayList<Long>(getChannelMembersList(channelId))
+//        if (currentList.contains(memberId)) throw IllegalAccessException("member id already exists in channel")
+//        currentList.add(memberId)
+//        channelStorage.setPropertyListToChannelId(channelId, MANAGERS_CONSTS.CHANNEL_MEMBERS_LIST, currentList)
+//        channelStorage.setPropertyLongToChannelId(channelId, MANAGERS_CONSTS.CHANNEL_NR_MEMBERS, currentList.size.toLong())
+//
+//        val size = currentList.size.toLong()
+//        updateKeyInTree(TREE_CHANNELS_BY_USERS_COUNT, channelId, size - 1L, size)
+//    }
+//
+//    override fun removeMemberFromChannel(channelId: Long, memberId: Long) {
+//        if (!isChannelValid(channelId = channelId)) throw IllegalArgumentException("channel id is not valid")
+//        val currentList = ArrayList<Long>(getChannelMembersList(channelId))
+//        if (!currentList.contains(memberId)) throw IllegalAccessException("member id does not exists in channel")
+//        currentList.remove(memberId)
+//        channelStorage.setPropertyListToChannelId(channelId, MANAGERS_CONSTS.CHANNEL_MEMBERS_LIST, currentList)
+//        channelStorage.setPropertyLongToChannelId(channelId, MANAGERS_CONSTS.CHANNEL_NR_MEMBERS, currentList.size.toLong())
+//
+//        val size = currentList.size.toLong()
+//        updateKeyInTree(TREE_CHANNELS_BY_USERS_COUNT, channelId, size + 1L, size)
+//    }
 
 
     /** OPERATORS LIST **/
-    override fun getChannelOperatorsList(channelId: Long): List<Long> {
+//    override fun getChannelOperatorsList(channelId: Long): List<Long> {
+//        if (!isChannelValid(channelId = channelId)) throw IllegalArgumentException("channel id is not valid")
+//        return channelStorage.getPropertyListByChannelId(channelId, MANAGERS_CONSTS.CHANNEL_OPERATORS_LIST)
+//                ?: throw IllegalArgumentException("channel id does not exist")
+//    }
+
+    override fun isMemberOperator(channelId: Long, userId: Long) : Boolean {
         if (!isChannelValid(channelId = channelId)) throw IllegalArgumentException("channel id is not valid")
-        return channelStorage.getPropertyListByChannelId(channelId, MANAGERS_CONSTS.CHANNEL_OPERATORS_LIST)
-                ?: throw IllegalArgumentException("channel id does not exist")
+        if (!isUserBelongsToChannel(channelId = channelId, userId = userId)) return false
+        return isUserBelongsToChannel(channelId, userId, isOperator = true)
     }
 
-    override fun addOperatorToChannel(channelId: Long, operatorId: Long) {
+    override fun makeUserOperatorOfChannel(channelId: Long, operatorId: Long) {
         if (!isChannelValid(channelId = channelId)) throw IllegalArgumentException("channel id is not valid")
-        val currentList = ArrayList<Long>(getChannelOperatorsList(channelId))
-        // if (currentList.contains(operatorId)) throw IllegalAccessException("operator id already exists in channel")
-        currentList.add(operatorId)
-        channelStorage.setPropertyListToChannelId(channelId, MANAGERS_CONSTS.CHANNEL_OPERATORS_LIST, currentList)
+//        val currentList = ArrayList<Long>(getChannelOperatorsList(channelId))
+//        currentList.add(operatorId)
+//        channelStorage.setPropertyListToChannelId(channelId, MANAGERS_CONSTS.CHANNEL_OPERATORS_LIST, currentList)
+        val tempTree = getTree(channelId)
+        val key = IdOperatorKey(operatorId, isOperator = true)
+        if (isUserBelongsToChannel(channelId, operatorId)) {
+            tempTree.delete(IdOperatorKey(operatorId, isOperator = false))
+            tempTree.put(IdOperatorKey(operatorId, isOperator = true))
+        } else {
+            throw IllegalAccessException("user does not belong to channel")
+        }
     }
 
-    override fun removeOperatorFromChannel(channelId: Long, operatorId: Long) {
+    override fun makeUserNotOperatorOfChannel(channelId: Long, operatorId: Long) {
         if (!isChannelValid(channelId = channelId)) throw IllegalArgumentException("channel id is not valid")
-        val currentList = ArrayList<Long>(getChannelOperatorsList(channelId))
-        // if (!currentList.contains(operatorId)) throw IllegalAccessException("operator id does not exists in channel")
-        currentList.remove(operatorId)
-        channelStorage.setPropertyListToChannelId(channelId, MANAGERS_CONSTS.CHANNEL_OPERATORS_LIST, currentList)
+//        val currentList = ArrayList<Long>(getChannelOperatorsList(channelId))
+//        currentList.remove(operatorId)
+//        channelStorage.setPropertyListToChannelId(channelId, MANAGERS_CONSTS.CHANNEL_OPERATORS_LIST, currentList)
+        val tempTree = getTree(channelId)
+        if (isUserBelongsToChannel(channelId, operatorId)) {
+            tempTree.delete(IdOperatorKey(operatorId, isOperator = true))
+            tempTree.put(IdOperatorKey(operatorId, isOperator = false))
+        } else {
+            throw IllegalAccessException("user does not belong to channel")
+        }
+    }
+
+    /** MEMBERS & OPERATORS TREE **/
+    override fun isUserBelongsToChannel(channelId: Long, userId: Long): Boolean {
+        return isUserBelongsToChannel(channelId, userId, true) || isUserBelongsToChannel(channelId, userId, false)
+    }
+
+    override fun isUserBelongsToChannel(channelId: Long, userId: Long, isOperator: Boolean): Boolean {
+        if (!isChannelValid(channelId = channelId)) throw IllegalArgumentException("channel id is not valid")
+        val tempTree = getTree(channelId)
+        val key = IdOperatorKey(userId, isOperator = isOperator)
+        return tempTree[key] != null
+    }
+
+    override fun addMemberToChannel(channelId: Long, userId: Long) {
+        if (!isChannelValid(channelId = channelId)) throw IllegalArgumentException("channel id is not valid")
+        val tempTree = getTree(channelId)
+        val key = IdOperatorKey(userId, isOperator=false)
+        if (isUserBelongsToChannel(channelId, userId)) throw IllegalAccessException("user already exists in channel")
+        tempTree.put(key)
+
+        numberOfMembersOnChange(channelId, diff = 1L)
+    }
+
+    override fun removeMemberFromChannel(channelId: Long, userId: Long) {
+        if (!isChannelValid(channelId = channelId)) throw IllegalArgumentException("channel id is not valid")
+        val tempTree = getTree(channelId)
+        if (!isUserBelongsToChannel(channelId, userId)) throw IllegalAccessException("user does not exists in channel")
+        tempTree.delete(IdOperatorKey(userId, isOperator=true))
+        tempTree.delete(IdOperatorKey(userId, isOperator=false))
+
+        numberOfMembersOnChange(channelId, diff = -1L)
     }
 
 
@@ -182,7 +239,6 @@ class ChannelManager
         }
         return false
     }
-
     private fun isChannelValid(channelName: String?): Boolean {
         if (channelName != null && channelName != CHANNEL_INVALID_NAME) {
             val id = channelStorage.getChannelIdByChannelName(channelName)
@@ -190,7 +246,6 @@ class ChannelManager
         }
         return false
     }
-
     private fun invalidateChannel(channelId: Long) {
         try {
             val channelName = getChannelNameById(channelId)
@@ -198,18 +253,15 @@ class ChannelManager
         } catch (e: IllegalArgumentException) {
         }
     }
-
     private fun invalidateChannel(channelId: Long, channelName: String) {
         channelStorage.setChannelIdToChannelName(channelName, CHANNEL_INVALID_ID)
         channelStorage.setPropertyStringToChannelId(channelId, CHANNEL_NAME_PROPERTY, CHANNEL_INVALID_NAME)
     }
-
     private fun addNewChannelToChannelTrees(channelId: Long, count: Long) {
         val key = CountIdKey(count = count, id = channelId)
         channelsByUsersCountTree.put(key)
         channelsByActiveUsersCountTree.put(key)
     }
-
     private fun removeChannelFromChannelTrees(channelId: Long) {
         val membersCount = getNumberOfMembersInChannel(channelId)
         val membersKey = CountIdKey(id = channelId, count = membersCount)
@@ -219,7 +271,6 @@ class ChannelManager
         val activeMembersKey = CountIdKey(id = channelId, count = activeMembersCount)
         channelsByActiveUsersCountTree.delete(activeMembersKey)
     }
-
     private fun changeNumberOfActiveMembersInChannelBy(channelId: Long, count: Long) {
         // value:
         if (!isChannelValid(channelId = channelId)) throw IllegalArgumentException("channel id is not valid")
@@ -229,7 +280,6 @@ class ChannelManager
 
         updateKeyInTree(TREE_CHANNELS_BY_ACTIVE_USERS_COUNT, channelId, currentValue, newValue)
     }
-
     private fun updateKeyInTree(treeName: String, channelId: Long, currentValue: Long, newValue: Long) {
         val tree = getTreeByName(treeName)
         val oldKey = CountIdKey(count = currentValue, id = channelId)
@@ -237,7 +287,6 @@ class ChannelManager
         val newKey = CountIdKey(count = newValue, id = channelId)
         tree.put(newKey)
     }
-
     private fun getTop10FromTree(treeName: String): List<String> {
         val tree = getTreeByName(treeName)
         val values = mutableListOf<String>()
@@ -251,12 +300,20 @@ class ChannelManager
         }
         return values
     }
-
     private fun getTreeByName(treeName: String): SecureAVLTree<CountIdKey> {
         return when (treeName) {
             TREE_CHANNELS_BY_USERS_COUNT -> channelsByUsersCountTree
             TREE_CHANNELS_BY_ACTIVE_USERS_COUNT -> channelsByActiveUsersCountTree
             else -> throw IllegalAccessException("tree does not exist, should not get here")
         }
+    }
+    private fun getTree(channelIdKey: Long) : SecureAVLTree<IdOperatorKey> {
+        return SecureAVLTree(channelTreesStorage, ConversionUtils.longToBytes(channelIdKey), defaultIdOperatorKey)
+    }
+    private fun numberOfMembersOnChange(channelId: Long, diff: Long) {
+        val currentValue = channelStorage.getPropertyLongByChannelId(channelId, MANAGERS_CONSTS.CHANNEL_NR_MEMBERS)
+        val newValue = currentValue!! + diff
+        channelStorage.setPropertyLongToChannelId(channelId, MANAGERS_CONSTS.CHANNEL_NR_MEMBERS, newValue)
+        updateKeyInTree(TREE_CHANNELS_BY_USERS_COUNT, channelId, currentValue = currentValue, newValue = newValue)
     }
 }

@@ -95,13 +95,13 @@ interface IUserManager {
 
 
     /** CHANNELS OF USER **/
-    /**
-     * gets the channel list of a specific user
-     * @param userId user id
-     * @throws IllegalArgumentException throws if user id does not exist in the system
-     * @return ids of the channels
-     */
-    fun getChannelListOfUser(userId: Long): List<Long>
+//    /**
+//     * gets the channel list of a specific user
+//     * @param userId user id
+//     * @throws IllegalArgumentException throws if user id does not exist in the system
+//     * @return ids of the channels
+//     */
+//    fun getChannelListOfUser(userId: Long): List<Long>
 
     /**
      * gets the channel list size of the user
@@ -109,7 +109,16 @@ interface IUserManager {
      * @throws IllegalArgumentException throws if user id does not exist in the system
      * @return size of the channel list
      */
-    fun getUserChannelListSize(userId: Long):Long
+    fun getNumberOfChannels(userId: Long):Long
+
+    /**
+     * return true id user is in channel
+     * @param userId Long
+     * @param channelId Long
+     * @throws IllegalArgumentException throws if user id does not exist in the system
+     * @return Boolean
+     */
+    fun isUserInChannel(userId: Long, channelId: Long): Boolean
 
     /**
      * addChannel a channel to a specific user
@@ -131,8 +140,15 @@ interface IUserManager {
      */
     fun removeChannelFromUser(userId: Long,channelId: Long)
 
+    /**
+     * get a lise of all user's channels
+     * @param userId Long
+     * @throws IllegalArgumentException throws if user id does not exist in the system
+     * @return List<Long>
+     */
+    fun getAllChannelsOfUser(userId: Long): List<Long>
 
-    /** USER STATISTICS **/
+        /** USER STATISTICS **/
     /**
      * get number of total users in the system
      * @return Long
