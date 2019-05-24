@@ -11,8 +11,7 @@ import il.ac.technion.cs.softwaredesign.storage.statistics.IStatisticsStorage
 import il.ac.technion.cs.softwaredesign.storage.utils.DB_NAMES
 import il.ac.technion.cs.softwaredesign.storage.utils.MANAGERS_CONSTS
 import il.ac.technion.cs.softwaredesign.storage.utils.STATISTICS_KEYS
-import il.ac.technion.cs.softwaredesign.storage.utils.TREE_CONST.ROOT_INIT_INDEX
-import il.ac.technion.cs.softwaredesign.storage.utils.TREE_CONST.ROOT_KEY
+import il.ac.technion.cs.softwaredesign.storage.utils.TREE_CONST
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
@@ -29,9 +28,11 @@ class ChannelManagerTest {
         val s1 = factory.open(DB_NAMES.TREE_USERS_BY_CHANNELS_COUNT.toByteArray())
         val s2 = factory.open(DB_NAMES.TREE_CHANNELS_BY_ACTIVE_USERS_COUNT.toByteArray())
         val s3 = factory.open(DB_NAMES.TREE_CHANNELS_BY_USERS_COUNT.toByteArray())
-        s1.write(ROOT_KEY.toByteArray(), Longs.toByteArray(ROOT_INIT_INDEX))
-        s2.write(ROOT_KEY.toByteArray(), Longs.toByteArray(ROOT_INIT_INDEX))
-        s3.write(ROOT_KEY.toByteArray(), Longs.toByteArray(ROOT_INIT_INDEX))
+        DB_NAMES.TREE_USERS_BY_CHANNELS_COUNT.toByteArray()
+        val rootKeyInByteArray = TREE_CONST.ROOT_KEY.toByteArray()
+        s1.write(DB_NAMES.TREE_USERS_BY_CHANNELS_COUNT.toByteArray()+rootKeyInByteArray, Longs.toByteArray(TREE_CONST.ROOT_INIT_INDEX))
+        s2.write(DB_NAMES.TREE_CHANNELS_BY_ACTIVE_USERS_COUNT.toByteArray()+rootKeyInByteArray, Longs.toByteArray(TREE_CONST.ROOT_INIT_INDEX))
+        s3.write(DB_NAMES.TREE_CHANNELS_BY_USERS_COUNT.toByteArray()+rootKeyInByteArray, Longs.toByteArray(TREE_CONST.ROOT_INIT_INDEX))
     }
 
     private fun initStatistics() {
@@ -45,7 +46,61 @@ class ChannelManagerTest {
     @BeforeEach
     private fun init() {
         initStatistics()
-        initTrees()
+        //initTrees()
+    }
+
+    @Test
+    fun `isUserBelongsToChannel return false on empty channel`() {
+        val channelId = channelManager.addChannel("ron")
+        assertThat(channelManager.isUserBelongsToChannel(channelId, 123L), isFalse)
+        assertThat(channelManager.getNumberOfMembersInChannel(channelId), equalTo(0L))
+    }
+
+    @Test
+    fun `isUserBelongsToChannel return true`() {
+        val channelId = channelManager.addChannel("ron")
+        val userId = 123L
+        channelManager.addMemberToChannel(channelId, userId)
+        assertThat(channelManager.isUserBelongsToChannel(channelId, userId), isTrue)
+        assertThat(channelManager.getNumberOfMembersInChannel(channelId), equalTo(1L))
+    }
+
+    @Test
+    fun `isUserBelongsToChannel return true after adding some users`() {
+        val channelId = channelManager.addChannel("ron")
+        val userIds = (100..130).map { it.toLong() }
+        userIds.forEach {channelManager.addMemberToChannel(channelId, it)}
+        userIds.forEach {assertThat(channelManager.isUserBelongsToChannel(channelId, it), isTrue)}
+        assertThat(channelManager.getNumberOfMembersInChannel(channelId), equalTo(31L))
+    }
+
+    @Test
+    fun `isUserBelongsToChannel return false after remove user`() {
+        val channelId = channelManager.addChannel("ron")
+        val userIds = (100..130).map { it.toLong() }
+        userIds.forEach {channelManager.addMemberToChannel(channelId, it)}
+        channelManager.removeMemberFromChannel(channelId, userIds[7])
+        assertThat(channelManager.getNumberOfMembersInChannel(channelId), equalTo(30L))
+        userIds.forEach {assertThat(channelManager.isUserBelongsToChannel(channelId, it), if (it==userIds[7]) isFalse else isTrue)}
+        channelManager.addMemberToChannel(channelId, userIds[7])
+        userIds.forEach {assertThat(channelManager.isUserBelongsToChannel(channelId, it), isTrue)}
+        assertThat(channelManager.getNumberOfMembersInChannel(channelId), equalTo(31L))
+    }
+
+    @Test
+    fun `add remove throws`() {
+        val channelId = channelManager.addChannel("ron")
+        val userId = 123L
+        assertThrows<IllegalAccessException> { channelManager.removeMemberFromChannel(channelId, userId) }
+        assertThat(channelManager.getNumberOfMembersInChannel(channelId), equalTo(0L))
+        channelManager.addMemberToChannel(channelId, userId)
+        assertThat(channelManager.getNumberOfMembersInChannel(channelId), equalTo(1L))
+        assertThat(channelManager.isUserBelongsToChannel(channelId, userId), isTrue)
+        assertThrows<IllegalAccessException> { channelManager.addMemberToChannel(channelId, userId) }
+        assertThat(channelManager.getNumberOfMembersInChannel(channelId), equalTo(1L))
+        channelManager.removeMemberFromChannel(channelId, userId)
+        assertThat(channelManager.isUserBelongsToChannel(channelId, userId), isFalse)
+        assertThat(channelManager.getNumberOfMembersInChannel(channelId), equalTo(0L))
     }
 
     @Test
@@ -305,43 +360,43 @@ class ChannelManagerTest {
 
     }
 
-    @Test
-    fun `getMembersList throws for CHANNEL_INVALID_ID`() {
-        channelManager.addChannel("ron")
-        assertThrows<IllegalArgumentException> { channelManager.getChannelMembersList(MANAGERS_CONSTS.CHANNEL_INVALID_ID) }
-    }
+//    @Test
+//    fun `getMembersList throws for CHANNEL_INVALID_ID`() {
+//        channelManager.addChannel("ron")
+//        assertThrows<IllegalArgumentException> { channelManager.getChannelMembersList(MANAGERS_CONSTS.CHANNEL_INVALID_ID) }
+//    }
 
-    @Test
-    fun `getMembersList throws for invalid channel id`() {
-        val id = channelManager.addChannel("ron")
-        assertThrows<IllegalArgumentException> { channelManager.getChannelMembersList(id + 1L) }
-    }
-
-    @Test
-    fun `getMembersList throws for removed channel id`() {
-        val id = channelManager.addChannel("ron")
-        channelManager.removeChannel(id)
-        assertThrows<IllegalArgumentException> { channelManager.getChannelMembersList(id) }
-    }
-
-    @Test
-    fun `getOperatorsList throws for CHANNEL_INVALID_ID`() {
-        channelManager.addChannel("ron")
-        assertThrows<IllegalArgumentException> { channelManager.getChannelOperatorsList(MANAGERS_CONSTS.CHANNEL_INVALID_ID) }
-    }
-
-    @Test
-    fun `getOperatorsList throws for invalid channel id`() {
-        val id = channelManager.addChannel("ron")
-        assertThrows<IllegalArgumentException> { channelManager.getChannelOperatorsList(id + 1L) }
-    }
-
-    @Test
-    fun `getOperatorsList throws for removed channel id`() {
-        val id = channelManager.addChannel("ron")
-        channelManager.removeChannel(id)
-        assertThrows<IllegalArgumentException> { channelManager.getChannelOperatorsList(id) }
-    }
+//    @Test
+//    fun `getMembersList throws for invalid channel id`() {
+//        val id = channelManager.addChannel("ron")
+//        assertThrows<IllegalArgumentException> { channelManager.getChannelMembersList(id + 1L) }
+//    }
+//
+//    @Test
+//    fun `getMembersList throws for removed channel id`() {
+//        val id = channelManager.addChannel("ron")
+//        channelManager.removeChannel(id)
+//        assertThrows<IllegalArgumentException> { channelManager.getChannelMembersList(id) }
+//    }
+//
+//    @Test
+//    fun `getOperatorsList throws for CHANNEL_INVALID_ID`() {
+//        channelManager.addChannel("ron")
+//        assertThrows<IllegalArgumentException> { channelManager.getChannelOperatorsList(MANAGERS_CONSTS.CHANNEL_INVALID_ID) }
+//    }
+//
+//    @Test
+//    fun `getOperatorsList throws for invalid channel id`() {
+//        val id = channelManager.addChannel("ron")
+//        assertThrows<IllegalArgumentException> { channelManager.getChannelOperatorsList(id + 1L) }
+//    }
+//
+//    @Test
+//    fun `getOperatorsList throws for removed channel id`() {
+//        val id = channelManager.addChannel("ron")
+//        channelManager.removeChannel(id)
+//        assertThrows<IllegalArgumentException> { channelManager.getChannelOperatorsList(id) }
+//    }
 
     @Test
     fun `add&remove MemberToChannel throws for CHANNEL_INVALID_ID`() {
@@ -377,7 +432,6 @@ class ChannelManagerTest {
     fun `addMemberToChannel throws if element exists`() {
         val id = channelManager.addChannel("ron")
         channelManager.addMemberToChannel(id, 20L)
-        channelManager.addOperatorToChannel(id, 7000L)
         assertThrows<IllegalAccessException> { channelManager.addMemberToChannel(id, 20L) }
     }
 
@@ -387,44 +441,44 @@ class ChannelManagerTest {
         assertThrows<IllegalAccessException> { channelManager.removeMemberFromChannel(id, 20L) }
     }
 
-    @Test
-    fun `getMembers&operators return empty list after init`() {
-        val id = channelManager.addChannel("ron")
-        assertThat(channelManager.getChannelMembersList(id), equalTo(emptyList()))
-        assertThat(channelManager.getChannelOperatorsList(id), equalTo(emptyList()))
-    }
+//    @Test
+//    fun `getMembers&operators return empty list after init`() {
+//        val id = channelManager.addChannel("ron")
+//        assertThat(channelManager.getChannelMembersList(id), equalTo(emptyList()))
+//        assertThat(channelManager.getChannelOperatorsList(id), equalTo(emptyList()))
+//    }
 
-    @Test
-    fun `getMembers&operators return full list`() {
-        val id = channelManager.addChannel("ron")
-
-        val members = listOf<Long>(20L, 8000L, 500L, 4747L)
-        val operators = listOf<Long>(2066L, 8040L, 5011L, 47337L)
-
-        members.forEach({ channelManager.addMemberToChannel(id, it) })
-        operators.forEach({ channelManager.addOperatorToChannel(id, it) })
-
-        assertThat(channelManager.getChannelMembersList(id), equalTo(members))
-        assertThat(channelManager.getChannelOperatorsList(id), equalTo(operators))
-    }
+//    @Test
+//    fun `getMembers&operators return full list`() {
+//        val id = channelManager.addChannel("ron")
+//
+//        val members = listOf<Long>(20L, 8000L, 500L, 4747L)
+//        val operators = listOf<Long>(2066L, 8040L, 5011L, 47337L)
+//
+//        members.forEach({ channelManager.addMemberToChannel(id, it) })
+//        operators.forEach({ channelManager.makeUserOperatorOfChannel(id, it) })
+//
+//        assertThat(channelManager.getChannelMembersList(id), equalTo(members))
+//        assertThat(channelManager.getChannelOperatorsList(id), equalTo(operators))
+//    }
 
     @Test
     fun `removeMembers&operators removes element`() {
-        val id = channelManager.addChannel("ron")
-
-        val members = mutableListOf<Long>(20L, 8000L, 500L, 4747L)
-        val operators = mutableListOf<Long>(2066L, 8040L, 5011L, 47337L)
-
-        members.forEach({ channelManager.addMemberToChannel(id, it) })
-        operators.forEach({ channelManager.addOperatorToChannel(id, it) })
-
-        channelManager.removeMemberFromChannel(id, members[2])
-        channelManager.removeOperatorFromChannel(id, operators[2])
-
-        members.removeAt(2)
-        operators.removeAt(2)
-        assertThat(channelManager.getChannelMembersList(id), equalTo(members.toList()))
-        assertThat(channelManager.getChannelOperatorsList(id), equalTo(operators.toList()))
+        // TODO: fix
+//        val id = channelManager.addChannel("ron")
+//
+//        val members = mutableListOf<Long>(20L, 8000L, 500L, 4747L)
+//
+//        members.forEach{ channelManager.addMemberToChannel(id, it) }
+//        members.forEach{ channelManager.makeUserOperatorOfChannel(id, it) }
+//
+//        channelManager.removeMemberFromChannel(id, members[2])
+//        channelManager.makeUserNotOperatorOfChannel(id, operators[2])
+//
+//        val removedMember = members.removeAt(2)
+//        val removedOp = operators.removeAt(2)
+//        assertThat(channelManager.isUserBelongsToChannel(id), equalTo(members.toList()))
+//        assertThat(channelManager.getChannelOperatorsList(id), equalTo(operators.toList()))
     }
 
     @Test
@@ -432,16 +486,12 @@ class ChannelManagerTest {
         val id = channelManager.addChannel("ron")
 
         val members = mutableListOf<Long>(20L, 8000L, 500L, 4747L)
-        val operators = mutableListOf<Long>(2066L, 8040L, 5011L, 47337L)
 
-        members.forEach({ channelManager.addMemberToChannel(id, it) })
-        operators.forEach({ channelManager.addOperatorToChannel(id, it) })
+        members.forEach{ channelManager.addMemberToChannel(id, it) }
 
-        members.forEach({ channelManager.removeMemberFromChannel(id, it) })
-        operators.forEach({ channelManager.removeOperatorFromChannel(id, it) })
+        members.forEach{ channelManager.removeMemberFromChannel(id, it) }
 
-        assertThat(channelManager.getChannelMembersList(id), equalTo(emptyList()))
-        assertThat(channelManager.getChannelOperatorsList(id), equalTo(emptyList()))
+        assertThat(channelManager.getNumberOfMembersInChannel(id), equalTo(0L))
     }
 
     @Test
@@ -501,7 +551,7 @@ class ChannelManagerTest {
         channelManager.addMemberToChannel(id1, 129L)
         channelManager.removeMemberFromChannel(id1, 123L)
         assertThat(channelManager.getNumberOfMembersInChannel(id1), equalTo(2L))
-        assertThat(channelManager.getChannelMembersList(id1).size.toLong(), equalTo(channelManager.getNumberOfMembersInChannel(id1)))
+//        assertThat(channelManager.getChannelMembersList(id1).size.toLong(), equalTo(channelManager.getNumberOfMembersInChannel(id1)))
     }
 
     @Test
@@ -511,19 +561,19 @@ class ChannelManagerTest {
         channelManager.addMemberToChannel(id1, 123L)
         assertThrows<IllegalAccessException> { channelManager.addMemberToChannel(id1, 123L) }
         assertThat(channelManager.getNumberOfMembersInChannel(id1), equalTo(1L))
-        assertThat(channelManager.getChannelMembersList(id1).size.toLong(), equalTo(channelManager.getNumberOfMembersInChannel(id1)))
+//        assertThat(channelManager.getChannelMembersList(id1).size.toLong(), equalTo(channelManager.getNumberOfMembersInChannel(id1)))
     }
 
     @Test
     fun `remove the same element twice throws and list size is valid`() {
         val id1 = channelManager.addChannel("ron")
         assertThat(channelManager.getNumberOfMembersInChannel(id1), equalTo(0L))
-        assertThat(channelManager.getChannelMembersList(id1).size.toLong(), equalTo(channelManager.getNumberOfMembersInChannel(id1)))
+//        assertThat(channelManager.getChannelMembersList(id1).size.toLong(), equalTo(channelManager.getNumberOfMembersInChannel(id1)))
         channelManager.addMemberToChannel(id1, 123L)
         channelManager.removeMemberFromChannel(id1, 123L)
         assertThrows<IllegalAccessException> { channelManager.removeMemberFromChannel(id1, 123L) }
         assertThat(channelManager.getNumberOfMembersInChannel(id1), equalTo(0L))
-        assertThat(channelManager.getChannelMembersList(id1).size.toLong(), equalTo(channelManager.getNumberOfMembersInChannel(id1)))
+//        assertThat(channelManager.getChannelMembersList(id1).size.toLong(), equalTo(channelManager.getNumberOfMembersInChannel(id1)))
     }
 
     @Test
@@ -620,5 +670,36 @@ class ChannelManagerTest {
     @Test
     fun `check active users top 10`() {
         // TODO("Implement this test")
+    }
+
+    @Test
+    fun `check operators`() {
+        val id1 = channelManager.addChannel("ron")
+        channelManager.addMemberToChannel(id1, 123L)
+        channelManager.makeUserOperatorOfChannel(id1, 123L)
+        assertThat(channelManager.isMemberOperator(id1, 123L), isTrue)
+        assertThat(channelManager.getNumberOfMembersInChannel(id1), equalTo(1L))
+        channelManager.addMemberToChannel(id1, 124L)
+        assertThat(channelManager.getNumberOfMembersInChannel(id1), equalTo(2L))
+        assertThat(channelManager.isMemberOperator(id1, 124L), isFalse)
+        channelManager.makeUserNotOperatorOfChannel(id1, 123L)
+        assertThat(channelManager.getNumberOfMembersInChannel(id1), equalTo(2L))
+        assertThat(channelManager.isMemberOperator(id1, 123L), isFalse)
+        channelManager.makeUserOperatorOfChannel(id1, 123L)
+        assertThat(channelManager.getNumberOfMembersInChannel(id1), equalTo(2L))
+        assertThat(channelManager.isMemberOperator(id1, 123L), isTrue)
+    }
+
+    @Test
+    fun `check operator exceptions`() {
+        assertThrows<IllegalArgumentException> { channelManager.makeUserOperatorOfChannel(12, 124L) }
+        assertThrows<IllegalArgumentException> { channelManager.makeUserNotOperatorOfChannel(12, 124L) }
+        val id1 = channelManager.addChannel("ron")
+        assertThrows<IllegalAccessException> { channelManager.makeUserOperatorOfChannel(id1, 124L) }
+        assertThrows<IllegalAccessException> { channelManager.makeUserNotOperatorOfChannel(id1, 124L) }
+        channelManager.addMemberToChannel(id1, 124L)
+        assertThat(channelManager.isMemberOperator(id1, 124L), isFalse)
+        channelManager.makeUserOperatorOfChannel(id1, 124L)
+        channelManager.makeUserNotOperatorOfChannel(id1, 124L)
     }
 }

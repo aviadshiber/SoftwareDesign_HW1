@@ -72,27 +72,37 @@ class CourseAppImpl
         val userId = tokenManager.getUserIdByToken(token)
                 ?: throw ImpossibleSituation("getUserIdByToken returned null but token is valid")
         val channelId: Long
+        val nrChannels = userManager.getNumberOfChannels(userId)
+        val getAllChannels = userManager.getAllChannelsOfUser(userId)
+        val f : () -> Any = { "$nrChannels, ${getAllChannels.size}" }
+        assert(nrChannels == getAllChannels.size.toLong(), f)
         if (!channelManager.isChannelNameExists(channel)) { // channel does not exist
             if (userManager.getUserPrivilege(userId) != IUserManager.PrivilegeLevel.ADMIN)
                 throw UserNotAuthorizedException()
             channelId = channelManager.addChannel(channel)
-            channelManager.addOperatorToChannel(channelId, userId)
+            try {
+                userManager.addChannelToUser(userId, channelId)
+            } catch (e: Exception) { /* if user try to join again, its ok */ }
+            channelManager.addMemberToChannel(channelId, userId)
+            channelManager.makeUserOperatorOfChannel(channelId, userId)
+            if (userManager.getUserStatus(userId) == IUserManager.LoginStatus.IN) {
+                channelManager.increaseNumberOfActiveMembersInChannelBy(channelId)
+            }
+            return
         } else {
             channelId = channelManager.getChannelIdByName(channel) // should not throw at this point
         }
 
         try {
             userManager.addChannelToUser(userId, channelId)
-        } catch (e: Exception) { /* if user try to join again, its ok */
-        }
+        } catch (e: Exception) { /* if user try to join again, its ok */ }
 
         try {
             channelManager.addMemberToChannel(channelId, userId)
             if (userManager.getUserStatus(userId) == IUserManager.LoginStatus.IN) {
                 channelManager.increaseNumberOfActiveMembersInChannelBy(channelId)
             }
-        } catch (e: Exception) { /* if user try to join again, its ok */
-        }
+        } catch (e: Exception) { /* if user try to join again, its ok */ }
     }
 
     override fun channelPart(token: String, channel: String) {
@@ -103,7 +113,9 @@ class CourseAppImpl
         val channelId = channelManager.getChannelIdByName(channel)
         if (!isUserMember(userId, channelId)) throw NoSuchEntityException()
         channelManager.removeMemberFromChannel(channelId, userId)
-        channelManager.removeOperatorFromChannel(channelId, userId)
+        try {
+            channelManager.makeUserNotOperatorOfChannel(channelId, userId)
+        } catch (e : Exception) { /* if user is not operator its ok */ }
         userManager.removeChannelFromUser(userId, channelId) // should not throw!!
         if (userManager.getUserStatus(userId) == IUserManager.LoginStatus.IN) {
             channelManager.decreaseNumberOfActiveMembersInChannelBy(channelId)
@@ -130,7 +142,7 @@ class CourseAppImpl
 
         if (userId == null || !isUserMember(userId, channelId)) throw NoSuchEntityException()
 
-        channelManager.addOperatorToChannel(channelId, userId)
+        channelManager.makeUserOperatorOfChannel(channelId, userId)
     }
 
     override fun channelKick(token: String, channel: String, username: String) {
@@ -140,7 +152,10 @@ class CourseAppImpl
         if (userId == null || !isUserMember(userId, channelId)) throw NoSuchEntityException()
 
         channelManager.removeMemberFromChannel(channelId, userId)
-        channelManager.removeOperatorFromChannel(channelId, userId)
+        try {
+            channelManager.makeUserNotOperatorOfChannel(channelId, userId)
+        } catch (e : Exception) { /* if user is not operator its ok */ }
+
         userManager.removeChannelFromUser(userId, channelId) // should not throw!!
         if (userManager.getUserStatus(userId) == IUserManager.LoginStatus.IN) {
             channelManager.decreaseNumberOfActiveMembersInChannelBy(channelId)
@@ -177,13 +192,15 @@ class CourseAppImpl
 
     /** PRIVATES **/
     private fun updateUserStatusInChannels(userId: Long, newStatus: IUserManager.LoginStatus) {
-        val channelsList = userManager.getChannelListOfUser(userId)
+        val channelsList = userManager.getAllChannelsOfUser(userId)
         for (channelId in channelsList) {
             if (newStatus == IUserManager.LoginStatus.IN)
                 channelManager.increaseNumberOfActiveMembersInChannelBy(channelId)
             else {
                 channelManager.decreaseNumberOfActiveMembersInChannelBy(channelId)
-                channelManager.removeOperatorFromChannel(channelId, userId)
+                try {
+                    channelManager.makeUserNotOperatorOfChannel(channelId, userId)
+                } catch (e : Exception) { /* do nothing */ }
             }
         }
     }
@@ -205,10 +222,10 @@ class CourseAppImpl
     }
 
     private fun isUserOperator(userId: Long, channelId: Long): Boolean {
-        return channelManager.getChannelOperatorsList(channelId).contains(userId)
+        return channelManager.isMemberOperator(channelId, userId)
     }
 
     private fun isUserMember(userId: Long, channelId: Long): Boolean {
-        return channelManager.getChannelMembersList(channelId).contains(userId)
+        return channelManager.isUserBelongsToChannel(channelId = channelId, userId = userId)
     }
 }

@@ -12,7 +12,6 @@ import javax.inject.Singleton
 class SecureChannelStorage
 @Inject constructor(@ChannelIdStorage private val channelIdsStorage: SecureStorage,
                     @ChannelDetailsStorage private val channelDetailsStorage: SecureStorage) : IChannelStorage {
-
     override fun getChannelIdByChannelName(channelName: String): Long? {
         val channelIdByteArray = channelIdsStorage.read(channelName.toByteArray()) ?: return null
         return ConversionUtils.bytesToLong(channelIdByteArray)

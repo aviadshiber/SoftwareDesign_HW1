@@ -15,12 +15,12 @@ annotation class GeneratorStorage
 
 @Singleton
 class SecureSequenceGenerator
- constructor(private val secureStorage: SecureStorage) : ISequenceGenerator {
-    private val lastGeneratedKey=LAST_GENERATED_ID.toByteArray()
+ constructor(private val secureStorage: SecureStorage, idInByteArray: ByteArray) : ISequenceGenerator {
+    private var lastGeneratedKey : ByteArray = idInByteArray + LAST_GENERATED_ID.toByteArray()
     override fun next(): Long {
-        val currentValueInByteArray :ByteArray= secureStorage.read(lastGeneratedKey) ?:  ConversionUtils.longToBytes(TREE_CONST.ROOT_INIT_INDEX)
-        val nextValue:Long= ConversionUtils.bytesToLong(currentValueInByteArray)+1L
-        secureStorage.write(lastGeneratedKey,ConversionUtils.longToBytes(nextValue))
+        val currentIndexInByteArray = secureStorage.read(lastGeneratedKey) ?: ConversionUtils.longToBytes(TREE_CONST.ROOT_INIT_INDEX)
+        val nextValue:Long= ConversionUtils.bytesToLong(currentIndexInByteArray)+1L
+        secureStorage.write(lastGeneratedKey, ConversionUtils.longToBytes(nextValue))
         return nextValue
     }
 

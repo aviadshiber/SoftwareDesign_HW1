@@ -7,8 +7,13 @@ import il.ac.technion.cs.softwaredesign.storage.SecureStorage
 import il.ac.technion.cs.softwaredesign.storage.api.IStatisticsManager
 import il.ac.technion.cs.softwaredesign.storage.api.IUserManager
 import il.ac.technion.cs.softwaredesign.storage.datastructures.CountIdKey
+import il.ac.technion.cs.softwaredesign.storage.datastructures.IdKey
+import il.ac.technion.cs.softwaredesign.storage.datastructures.IdOperatorKey
 import il.ac.technion.cs.softwaredesign.storage.datastructures.SecureAVLTree
 import il.ac.technion.cs.softwaredesign.storage.users.IUserStorage
+import il.ac.technion.cs.softwaredesign.storage.utils.ConversionUtils
+import il.ac.technion.cs.softwaredesign.storage.utils.DB_NAMES
+import il.ac.technion.cs.softwaredesign.storage.utils.DB_NAMES.TREE_USERS_BY_CHANNELS_COUNT
 import il.ac.technion.cs.softwaredesign.storage.utils.MANAGERS_CONSTS
 import il.ac.technion.cs.softwaredesign.storage.utils.MANAGERS_CONSTS.INVALID_USER_ID
 import il.ac.technion.cs.softwaredesign.storage.utils.MANAGERS_CONSTS.LIST_PROPERTY
@@ -21,11 +26,14 @@ class UserManager
 @Inject constructor(private val userStorage: IUserStorage,
                     private val statisticsManager: IStatisticsManager,
                     @UserIdSeqGenerator private val userIdGenerator: ISequenceGenerator,
+                    @UserTreesStorage private val userTreesStorage: SecureStorage,
                     @UsersByChannelCountStorage private val usersByChannelsCountStorage: SecureStorage
 ) : IUserManager {
 
-    private val defaultKey: () -> CountIdKey = { CountIdKey() }
-    private val usersByChannelsCountTree = SecureAVLTree(usersByChannelsCountStorage, defaultKey)
+    private val defaultIdKey: () -> IdKey = { IdKey() }
+    private val defaultCountIdKey: () -> CountIdKey = { CountIdKey() }
+    private val usersByChannelsCountTree =
+            SecureAVLTree(usersByChannelsCountStorage, TREE_USERS_BY_CHANNELS_COUNT.toByteArray(), defaultCountIdKey)
 
     override fun addUser(username: String, password: String, status: LoginStatus, privilege: PrivilegeLevel): Long {
         var userId = getUserId(username)
@@ -41,7 +49,8 @@ class UserManager
         userStorage.setPropertyStringToUserId(userId, MANAGERS_CONSTS.PASSWORD_PROPERTY, password)
         userStorage.setPropertyStringToUserId(userId, MANAGERS_CONSTS.STATUS_PROPERTY, status.ordinal.toString())
         userStorage.setPropertyStringToUserId(userId, MANAGERS_CONSTS.PRIVILAGE_PROPERTY, privilege.ordinal.toString())
-        initChannelList(userId)
+//        initChannelList(userId)
+        userStorage.setPropertyLongToUserId(userId, MANAGERS_CONSTS.SIZE_PROPERTY, 0L)
 
         // tree db
         addNewUserToUserTree(userId = userId, count = 0L)
@@ -111,38 +120,42 @@ class UserManager
 
 
     /** CHANNELS OF USER **/
-    override fun getChannelListOfUser(userId: Long): List<Long> {
-        return userStorage.getPropertyListByUserId(userId, LIST_PROPERTY)
-                ?: throw IllegalArgumentException("user id does not exist")
-    }
-
-    override fun getUserChannelListSize(userId: Long): Long {
+    override fun getNumberOfChannels(userId: Long): Long {
         return userStorage.getPropertyLongByUserId(userId, MANAGERS_CONSTS.SIZE_PROPERTY)
                 ?: throw IllegalArgumentException("user id does not exist")
     }
 
-    override fun addChannelToUser(userId: Long, channelId: Long) {
-        val currentList = ArrayList<Long>(getChannelListOfUser(userId))
-        if (currentList.contains(channelId)) throw IllegalAccessException("channel id already exists in users list")
-        currentList.add(channelId)
-        userStorage.setPropertyListToUserId(userId, LIST_PROPERTY, currentList)
-        userStorage.setPropertyLongToUserId(userId, MANAGERS_CONSTS.SIZE_PROPERTY, currentList.size.toLong())
+    override fun isUserInChannel(userId: Long, channelId: Long): Boolean {
+        if (!isUserIdExists(userId)) throw IllegalArgumentException("user does not exist")
+        val tempTree = getTree(userId)
+        val key = IdKey(id = channelId)
+        return tempTree[key] != null
+    }
 
-        // update tree:
-        val currentSize = currentList.size.toLong()
-        updateUserNode(userId, oldCount = currentSize - 1L, newCount = currentSize)
+    override fun addChannelToUser(userId: Long, channelId: Long) {
+        if (!isUserIdExists(userId)) throw IllegalArgumentException("user does not exist")
+        val tempTree = getTree(userId)
+        val key = IdKey(channelId)
+        if (isUserInChannel(userId, channelId)) throw IllegalAccessException("user already exists in channel")
+        tempTree.put(key)
+
+        numberOfChannelsOnChange(userId, diff = 1L)
     }
 
     override fun removeChannelFromUser(userId: Long, channelId: Long) {
-        val currentList = ArrayList<Long>(getChannelListOfUser(userId))
-        if (!currentList.contains(channelId)) throw IllegalAccessException("channel id does not exists in users list")
-        currentList.remove(channelId)
-        userStorage.setPropertyListToUserId(userId, LIST_PROPERTY, currentList)
-        userStorage.setPropertyLongToUserId(userId, MANAGERS_CONSTS.SIZE_PROPERTY, currentList.size.toLong())
+        if (!isUserIdExists(userId)) throw IllegalArgumentException("user does not exist")
+        val tempTree = getTree(userId)
+        val key = IdKey(channelId)
+        if (!isUserInChannel(userId, channelId)) throw IllegalAccessException("user does not exists in channel")
+        tempTree.delete(key)
 
-        // update tree:
-        val currentSize = currentList.size.toLong()
-        updateUserNode(userId, oldCount = currentSize + 1L, newCount = currentSize)
+        numberOfChannelsOnChange(userId, diff = -1L)
+    }
+
+    override fun getAllChannelsOfUser(userId: Long): List<Long> {
+        if (!isUserIdExists(userId)) throw IllegalArgumentException("user does not exist")
+        val tempTree = getTree(userId)
+        return tempTree.keys().map{it.getId()}
     }
 
 
@@ -175,16 +188,23 @@ class UserManager
         userStorage.setPropertyListToUserId(userId, LIST_PROPERTY, emptyList())
         userStorage.setPropertyLongToUserId(userId, MANAGERS_CONSTS.SIZE_PROPERTY, 0L)
     }
-
     private fun addNewUserToUserTree(userId: Long, count: Long) {
         val key = CountIdKey(count = count, id = userId)
         usersByChannelsCountTree.put(key)
     }
-
     private fun updateUserNode(userId: Long, oldCount: Long, newCount: Long) {
         val oldKey = CountIdKey(count = oldCount, id = userId)
         usersByChannelsCountTree.delete(oldKey)
         val newKey = CountIdKey(count = newCount, id = userId)
         usersByChannelsCountTree.put(newKey)
+    }
+    private fun getTree(userIdKey: Long) : SecureAVLTree<IdKey> {
+        return SecureAVLTree(userTreesStorage, ConversionUtils.longToBytes(userIdKey), defaultIdKey)
+    }
+    private fun numberOfChannelsOnChange(userId: Long, diff: Long) {
+        val currentValue = userStorage.getPropertyLongByUserId(userId, MANAGERS_CONSTS.SIZE_PROPERTY)
+        val newValue = currentValue!! + diff
+        userStorage.setPropertyLongToUserId(userId, MANAGERS_CONSTS.SIZE_PROPERTY, newValue)
+        updateUserNode(userId = userId, oldCount = currentValue, newCount = newValue)
     }
 }

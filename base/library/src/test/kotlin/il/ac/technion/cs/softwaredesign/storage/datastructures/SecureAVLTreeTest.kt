@@ -43,12 +43,11 @@ class SecureAVLTreeTest {
     }
     private val storageMock= mutableMapOf<ByteArrayKey,ByteArray>()
     private var storageLayer: SecureStorage = mockk()
-    private val tree=SecureAVLTree(storageLayer) {SimpleKey(0L)}
+    private val id = "id"
+    private val tree : SecureAVLTree<SimpleKey>
     private val blackRedTree= TreeMap<SimpleKey,SimpleKey>()
-
     private fun initTree() {
-
-        storageLayer.write(ROOT_KEY.toByteArray(), Longs.toByteArray(ROOT_INIT_INDEX))
+        storageLayer.write(id.toByteArray()+ROOT_KEY.toByteArray(), Longs.toByteArray(ROOT_INIT_INDEX))
     }
     init{
         val keySlot= slot<ByteArray>()
@@ -66,7 +65,7 @@ class SecureAVLTreeTest {
             val key = ByteArrayKey(keySlot.captured)
             storageMock[key]
         }
-
+        tree=SecureAVLTree(storageLayer, id.toByteArray()) {SimpleKey(0L)}
     }
 
     @BeforeEach
@@ -173,14 +172,12 @@ class SecureAVLTreeTest {
 
     @Test
     fun min() {
-//        var minValue:Long= Long.MAX_VALUE
-//        for(i in 1..2000){
-//            val v = SimpleKey(Random.nextLong(from=ROOT_INIT_INDEX+1, until=Long.MAX_VALUE))
-//            minValue=min(minValue,v.i)
-//            tree.put(v)
-//        }
-//         val treeMin = tree.min().i
-//         assertThat(treeMin, equalTo(minValue))
+        for(i in 1..400){
+            val v = SimpleKey(Random.nextLong(from=ROOT_INIT_INDEX+1, until=Long.MAX_VALUE))
+            blackRedTree[v] = v
+            tree.put(v)
+        }
+        assertThat(tree.min(), equalTo(blackRedTree.firstEntry().key))
     }
 
     @Test

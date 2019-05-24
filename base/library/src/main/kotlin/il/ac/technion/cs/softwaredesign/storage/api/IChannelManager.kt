@@ -96,7 +96,7 @@ interface IChannelManager {
      * @throws IllegalArgumentException throws if channelId does not exist in the system
      * @return ids of the members of current channel
      */
-    fun getChannelMembersList(channelId: Long) : List<Long>
+    //fun getChannelMembersList(channelId: Long) : List<Long>
 
     /**
      * add a member to a specific channel
@@ -106,7 +106,7 @@ interface IChannelManager {
      * @throws IllegalArgumentException throws if channel Id does not exist in the system
      * @throws IllegalAccessException throws if memberId already exists in channel
      */
-    fun addMemberToChannel(channelId:Long, memberId:Long)
+    //fun addMemberToChannel(channelId:Long, memberId:Long)
 
     /**
      * removes a member from a specific channel
@@ -116,7 +116,7 @@ interface IChannelManager {
      * @throws IllegalArgumentException throws if channel Id or member id does not exist in the system
      * @throws IllegalAccessException throws if memberId does not exist in channel
      */
-    fun removeMemberFromChannel(channelId: Long,memberId: Long)
+    //fun removeMemberFromChannel(channelId: Long,memberId: Long)
 
 
     /** OPERATORS LIST **/
@@ -126,16 +126,26 @@ interface IChannelManager {
      * @throws IllegalArgumentException throws if channelId does not exist in the system
      * @return ids of the operators of current channel
      */
-    fun getChannelOperatorsList(channelId: Long) : List<Long>
+    // fun getChannelOperatorsList(channelId: Long) : List<Long>
 
     /**
+     * check is exist user is an operator
+     * @param channelId Long
+     * @param userId Long
+     * @throws IllegalArgumentException throws if channel Id does not exist in the system,
+     * @return Boolean
+     */
+    fun isMemberOperator(channelId: Long, userId: Long) : Boolean
+
+        /**
      * add an operators to a specific channel
      * Important: this function assumes that member id is a valid user
      * @param channelId channel Id
      * @param operatorId operators Id
      * @throws IllegalArgumentException throws if channel Id does not exist in the system
+     * @throws IllegalAccessException user id does not belong to channel
      */
-    fun addOperatorToChannel(channelId:Long, operatorId:Long)
+    fun makeUserOperatorOfChannel(channelId:Long, operatorId:Long)
 
     /**
      * removes an operators from a specific channel
@@ -143,8 +153,46 @@ interface IChannelManager {
      * @param channelId channel Id
      * @param operatorId operators Id
      * @throws IllegalArgumentException throws if channel Id does not exist in the system
+     * @throws IllegalAccessException user id does not belong to channel
      */
-    fun removeOperatorFromChannel(channelId: Long, operatorId: Long)
+    fun makeUserNotOperatorOfChannel(channelId: Long, operatorId: Long)
+
+    /**
+     * Check if user(operator or not) exists in channel
+     * @param channelId Long
+     * @param userId Long
+     * @throws IllegalArgumentException throws if channel Id does not exist in the system
+     * @return Boolean, true if user with userId exists, false otherwise
+     */
+    fun isUserBelongsToChannel(channelId: Long, userId: Long): Boolean
+
+    /**
+     * Check if user exists in channel
+     * @param channelId Long
+     * @param userId Long
+     * @param isOperator Long, true if user is an operator of this channel, false otherwise
+     * @throws IllegalArgumentException throws if channel Id does not exist in the system
+     * @return Boolean, true if user with userId and isOperator exists, false otherwise
+     */
+    fun isUserBelongsToChannel(channelId: Long, userId: Long, isOperator: Boolean): Boolean
+
+    /**
+     * Add new user to channel
+     * @param channelId Long
+     * @param userId Long to add
+     * @throws IllegalArgumentException throws if channel Id does not exist in the system
+     * @throws IllegalAccessException throws if user with user id already exists in channel
+     */
+    fun addMemberToChannel(channelId: Long, userId: Long)
+
+    /**
+     * Remove user from channel
+     * @param channelId Long
+     * @param userId Long, to add
+     * @throws IllegalArgumentException throws if channel Id does not exist in the system
+     * @throws IllegalAccessException throws if user with user id does not exist in channel
+     */
+    fun removeMemberFromChannel(channelId: Long, userId: Long)
 
 
     /** CHANNEL COMPLEX STATISTICS **/

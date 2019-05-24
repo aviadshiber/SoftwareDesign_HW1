@@ -41,6 +41,6 @@ class CourseAppInitializerImpl
 
     private fun initTree(dbName: String) {
         val db = storageFactory.open(dbName.toByteArray())
-        db.write(ROOT_KEY.toByteArray(), Longs.toByteArray(ROOT_INIT_INDEX))
+        db.write(dbName.toByteArray() + ROOT_KEY.toByteArray(), Longs.toByteArray(ROOT_INIT_INDEX))
     }
 }
