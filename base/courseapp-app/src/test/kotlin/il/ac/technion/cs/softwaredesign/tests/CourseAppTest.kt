@@ -638,16 +638,42 @@ class CourseAppTest{
         val admin= courseApp.login("admin","admin")
 
         courseApp.channelJoin(admin,"#1")
-        assertThat(courseApp.numberOfActiveUsersInChannel(admin,"#1"), equalTo(1L))
+        assertThat(runWithTimeout(Duration.ofSeconds(10)) { courseApp.numberOfActiveUsersInChannel(admin, "#1") }, equalTo(1L))
         lateinit var token:String
         (1..511).forEach{
             token=courseApp.login("$it","password")
             courseApp.channelJoin(token,"#1")
         }
-        assertThat(courseApp.numberOfActiveUsersInChannel(admin,"#1"), equalTo(512L))
+        assertThat(runWithTimeout(Duration.ofSeconds(10)) { courseApp.numberOfActiveUsersInChannel(admin, "#1") }, equalTo(512L))
         courseApp.channelPart(admin,"#1")
         courseApp.logout(token)
-        assertThat(courseApp.numberOfActiveUsersInChannel(admin,"#1"), equalTo(510L))
+        assertThat(runWithTimeout(Duration.ofSeconds(10)) { courseApp.numberOfActiveUsersInChannel(admin, "#1") }, equalTo(510L))
+
+    }
+
+    @Test
+    fun `making sure cant join operator more than once`() {
+        val firstUser = "aviad"
+        val aviad = courseApp.login(firstUser, "shiber")
+        val secondUser = "ron"
+        val ron = courseApp.login(secondUser, "ron")
+        val channel = "#SoftwareDesign"
+        courseApp.channelJoin(aviad, channel)
+        courseApp.channelJoin(ron, channel)
+        courseApp.channelMakeOperator(aviad, channel, secondUser)
+        courseApp.channelMakeOperator(aviad, channel, secondUser)
+        courseApp.channelMakeOperator(ron, channel, secondUser)
+        courseApp.channelPart(ron, channel)
+        courseApp.channelJoin(ron, channel)
+        //an Exception should be thrown if because
+        //ron should  not an operator anymore(maybe the test were able to add it twice)
+        assertThrows<UserNotAuthorizedException> { courseApp.channelMakeOperator(ron, channel, firstUser) }
+    }
+
+
+    @Test
+    fun `top 10 channel by users`() {
+        //TODO: impl
 
     }
 
