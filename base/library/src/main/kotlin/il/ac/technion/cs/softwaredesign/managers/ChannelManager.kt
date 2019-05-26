@@ -149,7 +149,7 @@ class ChannelManager
     override fun addOperatorToChannel(channelId: Long, operatorId: Long) {
         if (!isChannelValid(channelId = channelId)) throw IllegalArgumentException("channel id is not valid")
         val currentList = ArrayList<Long>(getChannelOperatorsList(channelId))
-        // if (currentList.contains(operatorId)) throw IllegalAccessException("operator id already exists in channel")
+        if (currentList.contains(operatorId)) return //operator id already exists in channel
         currentList.add(operatorId)
         channelStorage.setPropertyListToChannelId(channelId, MANAGERS_CONSTS.CHANNEL_OPERATORS_LIST, currentList)
     }

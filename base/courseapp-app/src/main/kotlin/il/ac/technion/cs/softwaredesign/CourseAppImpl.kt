@@ -129,7 +129,6 @@ class CourseAppImpl
         }
 
         if (userId == null || !isUserMember(userId, channelId)) throw NoSuchEntityException()
-
         channelManager.addOperatorToChannel(channelId, userId)
     }
 
